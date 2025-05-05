@@ -123,6 +123,43 @@ class CalibrationExperiment:
             pmat_val, rmat_val = self.stylet.get_shape(w_init_val)
 
         return pmat_val, rmat_val
+    
+    def perform_validation(self, fbg_filepath, val_gt_curves, val_gt_angles):
+        curves = val_gt_curves.shape[0]
+        angles = val_gt_angles.shape[0]
+
+        te_tot = np.zeros((curves*angles,self.num_trials))
+        rmse_tot = np.zeros((curves*angles,self.num_trials))
+        errs = np.zeros((self.stylet.num_inserted,curves*angles,self.num_trials))
+        for k in range(curves):
+            for a in range(angles):
+                kcx_truth = cos(val_gt_angles[a]) * val_gt_curves[k] 
+                kcy_truth = sin(val_gt_angles[a]) * val_gt_curves[k] 
+                w_truth = np.array([kcy_truth, kcx_truth, 0])
+                for t in range(self.num_trials):
+                    p_gt, r_gt = self.stylet.get_shape(w_truth)
+                    p_val, r_val = self.calc_shape_from_data(f'{fbg_filepath}{val_gt_curves[k]}-{round(val_gt_angles[a]*180/pi)}-{t+1}')
+
+                    te = p_gt[-1, :] - p_val[-1, :]
+                    te = la.norm(te)
+                    te_tot[k*angles+a, t] = te
+                    perr = la.norm(p_gt[:, :] - p_val[:, :], axis=1)
+                    sqerr = np.square(perr)
+                    mse = np.mean(sqerr)
+                    rmse = np.sqrt(mse)
+                    rmse_tot[k*angles+a, t] = rmse
+        return te_tot, rmse_tot
+    
+    def display_validation_results(self, te_tot, rmse_tot):
+        print('Tip Error')
+        print('Values: \n', te_tot)
+        print('Mean TE: \n', np.mean(te_tot)*1e3, 'mm')
+        print('TE STD: \n', np.std(te_tot)*1e3, 'mm')
+        
+        print('\nRoot-mean-square Error')
+        print('Values: \n', rmse_tot)
+        print('Mean RMSE: \n', np.mean(rmse_tot)*1e3, 'mm')
+        print('RMSE STD: \n', np.std(rmse_tot)*1e3, 'mm')
 
 if __name__ == '__main__':
     gt_curvatures = np.array([0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
@@ -136,6 +173,11 @@ if __name__ == '__main__':
     cal = CalibrationExperiment(gt_curvatures, gt_angles, stylet)
     
     Cs, weights = cal.perform_calibration(cal_path, depth)
+
+    te, rmse = cal.perform_validation('cal_dataset/', np.array([0.33, 0.66, 1.33]), gt_angles)
+
+    cal.display_validation_results(te, rmse)
+
     
     
 
