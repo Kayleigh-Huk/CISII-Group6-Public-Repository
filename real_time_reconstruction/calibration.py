@@ -136,6 +136,16 @@ def plot_3d(shape1, shape2):
     
     return fig, ax
 
+def axisEqual3D( ax ):
+    """ taken from online """
+    extents = np.array( [ getattr( ax, 'get_{}lim'.format( dim ) )() for dim in 'xyz' ] )
+    sz = extents[ :, 1 ] - extents[ :, 0 ]
+    centers = np.mean( extents, axis=1 )
+    maxsize = max( abs( sz ) )
+    r = maxsize / 2
+    for ctr, dim in zip( centers, 'xyz' ):
+        getattr( ax, 'set_{}lim'.format( dim ) )( ctr - r, ctr + r )
+
 if __name__ == '__main__':
     gt_curvatures = np.array([0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
     gt_angles = np.array([0, pi/2])
@@ -164,4 +174,17 @@ if __name__ == '__main__':
 
     print('Tip Error:', round(la.norm(pmat_gt[-1] - p[-1])*1e3, 3), 'mm')
     print('RMSE:', round(rmse*1e3, 3), 'mm')
+
+    fig, ax = plot_3d(pmat_gt*1e3, p*1e3)
+    ax.plot(
+        0,
+        0,
+        50,
+        'r*',
+        label="insertion_point"
+    )
+    axisEqual3D(ax)
+    plt.title('0.75 Curve Reconstruction')
+
+    plt.show()
 
