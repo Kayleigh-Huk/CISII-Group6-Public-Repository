@@ -1,5 +1,5 @@
 from calibration import CalibrationExperiment
-from reconstruction import ShapeSensingStylet
+from stylet import ShapeSensingStylet
 from math import pi
 import numpy as np
 import numpy.linalg as la
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     
     Cs, weights = cal.perform_calibration(cal_path, depth)  
     
-    path = input("Enter curvature file: ")
+    path = 'cal_dataset/0.33-0-1' #input("Enter curvature file: ")
     gtx = float(input("Enter ground truth XZ bending: "))
     gty = float(input("Enter ground truth YZ bending: "))
 
