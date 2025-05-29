@@ -21,9 +21,13 @@ def read_parameter_json(filename : str, calibrated : bool) -> list:
     Returns
     -------
     attributes : list
-        The parameters parsed from the JSON file in the following order:
-            [length (float), diameter (float), emod (float), pratio (int), 
+        The parameters parsed from the JSON file in the following orders depending 
+        on calibration status:
+        Uncalibrated = [length (float), diameter (float), emod (float), pratio (int), 
              num_aa (int), num_channels (int), aa_locations (list of floats)].
+        Calibrated = [length (float), diameter (float), emod (float), pratio (int), 
+             num_aa (int), num_channels (int), aa_locations (list of floats), 
+             reference_filepath (str), cal_matrices (2D list), aa_weights (list)]
     """
     # parse provided JSON file
     with open(filename, 'r') as json_file:
@@ -44,13 +48,60 @@ def read_parameter_json(filename : str, calibrated : bool) -> list:
     
     # if stylet is calibrated, add the calibration matrices to the attributes list
     if calibrated:
-        cal_key = "Calibration matrices"
-        if cal_key in data.keys():
-            attributes.append(data[cal_key])
-        else:
-            raise ValueError(f"{cal_key} not found. Please calibrate stylet using \'calibration.py\' first.")
-    
+        cal_keys = ["Reference filepath", "Calibration matrices", "Active area weights"]
+        for key in cal_keys:
+            if key in data.keys():
+                attributes.append(data[key])
+            else:
+                raise ValueError(f"{key} not found. Please calibrate stylet using \'calibration.py\' first.")
+        
     return attributes
+
+def read_trial_data(filepath : str, curve : float, angle : int, num_aa : int, num_channels : int, reference : np.ndarray = None, num_insertions : int = 5) -> np.ndarray:
+    """
+    Read in the average wavelength data for a curvature trial with a defined number of insertions.
+
+    Parameters
+    ----------
+    filepath : string
+        The path to the files from the insertion trial.
+    curve : float
+        The curvature in inverse meters for the insertion trial.
+    angle : int
+        The rotation angle in degrees for the insertion trial.
+    num_aa : int
+        The number of active areas along each channel in the stylet.
+    num_channels : int
+        The number of channels in the stylet.
+    reference_wavelengths : np.ndarray
+        Default value = None
+        The reference wavelengths to use as the baseline to compute the wavelength shifts.
+        Temperature compensation will only be performed if a reference is provided.
+    num_insertions : int
+        Default value = 5
+        The number of insertions performed for the trial.
+
+    Raises
+    ------
+    ValueError
+        Raises value error if the file provided does not contain 200 valid readings.
+
+    Returns
+    -------
+    trial : np.ndarray of shape (num_channels, num_aa)
+        The average wavelengths (if reference_wavelengths = None) or wavelength shifts from
+        every insertion.
+    """
+    trial = np.zeros((num_insertions, num_channels, num_aa))
+    # add the data from each insertion to the trial array
+    for k in range(num_insertions):
+        fname = f'{filepath}{curve}-{angle}-{k+1}'
+        trial[k, :, :] = read_interrogator_csv(fname, num_aa, num_channels, reference=reference) 
+    
+    # average all the insertions
+    trial = np.mean(trial, 0) 
+
+    return trial
 
 def read_interrogator_csv(filename : str, num_aa : int, num_channels : int, reference_wavelengths : np.ndarray = None) -> np.ndarray:
     """

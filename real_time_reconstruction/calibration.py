@@ -7,15 +7,8 @@ from stylet import ShapeSensingStylet
 def main():
     pass
 
-def get_trial_data(self, path : str, curve : float, angle : int, reference : bool = False) -> np.ndarray:
-    trial = np.zeros((self.num_trials, self.stylet.num_channels, self.stylet.num_inserted))
-    for k in range(self.num_trials):
-        fname = f'{path}{curve}-{angle}-{k+1}'
-        trial[k, :, :] = self.stylet.get_wave_data(fname, reference=reference, temp_comp=(not reference)) 
-
-    return np.mean(trial, 0) 
-
-def append_cal_matrices_to_parameter_json(filename : str, cal_matrices : np.ndarray):
+def append_cal_results_to_parameter_json(filename : str, cal_matrices : np.ndarray):
+    # should also add a reference wavelength filepath
     pass
 
 def write_validation_results(te_tot, rmse_tot):
