@@ -2,16 +2,27 @@ import numpy as np
 import numpy.linalg as la
 from math import sin, cos, pi
 
-from stylet import ShapeSensingStylet
+from stylet import Stylet
+from io_methods import read_trial_data, read_parameter_json
 
-def main():
-    pass
+def main(parameter_file, cal_path, val_path, insertion_depth, gt_cal_curvatures, gt_cal_angles, gt_val_curvatures, gt_val_angles, clinical_thresh : float = 2):
+    stylet = Stylet(parameter_file, False)
 
-def append_cal_results_to_parameter_json(filename : str, cal_matrices : np.ndarray):
+    Cs, weights = perform_calibration(stylet, cal_path, insertion_depth, gt_cal_curvatures, gt_cal_angles, clinical_thresh)
+    
+    ref_file = f'{cal_path}0-0-1'
+    append_cal_results_to_parameter_json(parameter_file, ref_file, Cs, weights)
+    stylet.cal_matrices = Cs
+    stylet.aa_weights = weights
+
+    te, rmse = perform_validation(stylet, val_path, gt_val_curvatures, gt_val_angles)
+    write_validation_results(cal_path, te, rmse)
+
+def append_cal_results_to_parameter_json(filename : str, reference_file : str, cal_matrices : np.ndarray, weightings : np.ndarray):
     # should also add a reference wavelength filepath
     pass
 
-def write_validation_results(te_tot, rmse_tot):
+def write_validation_results(filepath, te_tot, rmse_tot):
     print('Tip Error')
     print('Values: \n', te_tot)
     print('Mean TE: \n', np.mean(te_tot)*1e3, 'mm')
@@ -22,57 +33,75 @@ def write_validation_results(te_tot, rmse_tot):
     print('Mean RMSE: \n', np.mean(rmse_tot)*1e3, 'mm')
     print('RMSE STD: \n', np.std(rmse_tot)*1e3, 'mm')
 
-def perform_calibration(self, fbg_data_filepath : str, insertion_depth : float):
-    self.stylet.set_insertion_depth(insertion_depth)
-    reference_wavelengths = self.get_trial_data(fbg_data_filepath, 0, 0, reference=True)
+def perform_calibration(stylet : Stylet, fbg_data_filepath : str, insertion_depth : float, curves : np.ndarray, angles : np.ndarray, clinical_thresh : float):
+    stylet.update_insertion_depth(insertion_depth)
+    reference_wavelengths = read_trial_data(fbg_data_filepath, 0, 0, stylet.num_aa, stylet.num_channels)
 
-    self.stylet.set_reference(reference_wavelengths)
+    stylet.set_reference(reference_wavelengths)
 
-    calibration_shifts = self.get_wave_shifts(fbg_data_filepath)
-    kappa_mat = self.get_k_matrix()
+    calibration_shifts = get_wave_shifts(stylet, fbg_data_filepath, curves, angles)
+    kappa_mat = get_k_matrix(curves, angles)
         
-    weight_mat = self.get_w_matrix()
+    weight_mat = get_w_matrix(curves, angles, clinical_thresh)
 
-    C_mats, aa_weight_mat = self.get_calibration_matrix(kappa_mat, weight_mat, calibration_shifts)
-
-    self.cal_mats = C_mats
-    self.weightings = aa_weight_mat
+    C_mats, aa_weight_mat = get_calibration_matrix(stylet, kappa_mat, weight_mat, calibration_shifts)
 
     return C_mats, aa_weight_mat
+
+def get_wave_shifts(stylet : Stylet, fbg_data_filepath : str, gt_curvatures : np.ndarray, gt_angles : np.ndarray):
+    num_curvatures = gt_curvatures.shape[0]
+    num_angles = gt_angles.shape[0]
+    wvs = np.zeros((num_angles*num_curvatures+1, stylet.num_channels, stylet.num_aa), dtype=np.float64)
+        
+    for i in range(num_curvatures):
+        for j in range(num_angles):    
+            wvs[i*num_angles+j,:] = read_trial_data(fbg_data_filepath, gt_curvatures[i], round(gt_angles[j]*180/pi), stylet.num_aa, stylet.num_channels, stylet.reference)
+    wvs[-1,:] = stylet.reference
+    shifts = np.zeros((num_curvatures*num_angles+1, stylet.num_channels, stylet.num_aa), dtype=np.float64)
+    for i in range(num_angles*num_curvatures+1):
+        shifts[i, :, :] = wvs[i].reshape((stylet.num_channels, stylet.num_aa))
+
+    return shifts
 
     # get kappa matrix
     # column 0: rotation in xz plane
     # column 1: rotation in yz plane
-def get_k_matrix(self):
-    k = np.zeros((self.num_curvatures*self.num_angles+1, 2), dtype=np.float64)
-    for i in range(self.num_curvatures):
-        for j in range(self.num_angles):
-            k[i*self.num_angles+j, 0] = self.gt_curvatures[i] * cos(self.gt_angles[j])
-            k[i*self.num_angles+j, 1] = self.gt_curvatures[i] * sin(self.gt_angles[j])
+def get_k_matrix(gt_curvatures : np.ndarray, gt_angles : np.ndarray):
+    num_curvatures = gt_curvatures.shape[0]
+    num_angles = gt_angles.shape[0]
+
+    k = np.zeros((num_curvatures*num_angles+1, 2), dtype=np.float64)
+    for i in range(num_curvatures):
+        for j in range(num_angles):
+            k[i*num_angles+j, 0] = gt_curvatures[i] * cos(gt_angles[j])
+            k[i*num_angles+j, 1] = gt_curvatures[i] * sin(gt_angles[j])
     k[-1] = [0,0]
 
     return k
 
 # get square weights matrix for weighted least squares
-def get_w_matrix(self):
-    trials = np.ones((self.num_angles*self.num_curvatures+1,))
-    weights = np.ones((self.num_angles*self.num_curvatures+1,))
-    for i in range(self.num_curvatures):
-        for j in range(self.num_angles):
-            trials[i*self.num_angles+j] = self.gt_curvatures[i]
+def get_w_matrix(gt_curvatures : np.ndarray, gt_angles : np.ndarray, clinical_threshold : float):
+    num_curvatures = gt_curvatures.shape[0]
+    num_angles = gt_angles.shape[0]
+
+    trials = np.ones((num_angles*num_curvatures+1,))
+    weights = np.ones((num_angles*num_curvatures+1,))
+    for i in range(num_curvatures):
+        for j in range(num_angles):
+            trials[i*num_angles+j] = gt_curvatures[i]
     trials[-1] = 0
-    inds = np.where(trials > self.clinical_threshold)
+    inds = np.where(trials > clinical_threshold)
     weights[inds] = 0.05
     w = np.diag(weights)
 
     return w
 
-def get_calibration_matrix(self, k : np.array, W : np.array, shifts : np.array):
-    Cs = np.zeros((self.stylet.num_inserted, 2, self.stylet.num_channels))
-    k_ests = np.zeros((self.stylet.num_inserted, self.num_curvatures*self.num_angles+1, 2))
-    MSE = np.zeros((self.stylet.num_inserted,))
+def get_calibration_matrix(stylet : Stylet, k : np.array, W : np.array, shifts : np.array):
+    Cs = np.zeros((stylet.num_inserted, 2, stylet.num_channels))
+    k_ests = np.zeros((stylet.num_inserted, k.shape[0], 2))
+    MSE = np.zeros((stylet.num_inserted,))
 
-    for i in range(self.stylet.num_inserted):
+    for i in range(stylet.num_inserted):
         # calibration for each AA       
         aa = shifts[:,:,i]
             
@@ -90,38 +119,22 @@ def get_calibration_matrix(self, k : np.array, W : np.array, shifts : np.array):
 
     return Cs, weights
     
-def calc_shape_from_data(self, fbg_filepath : str):
-    kxz_val = 0
-    kyz_val = 0
-    for i in range(self.stylet.num_inserted):
-        # calibration for each AA       
-        aa = self.stylet.get_wave_data(fbg_filepath)
-        aa = aa[:, i]
-        k_est = self.cal_mats[i] @ aa
-
-        kxz_val += k_est[0] * self.weightings[i]
-        kyz_val += k_est[1] * self.weightings[i]
-                
-        w_init_val = np.array([kyz_val, kxz_val, 0])
-        pmat_val, rmat_val = self.stylet.get_shape(w_init_val)
-
-    return pmat_val, rmat_val
-    
-def perform_validation(self, fbg_filepath, val_gt_curves, val_gt_angles):
+def perform_validation(stylet : Stylet, fbg_filepath : str, val_gt_curves : np.ndarray, val_gt_angles : np.ndarray, num_trials : int = 5):
     curves = val_gt_curves.shape[0]
     angles = val_gt_angles.shape[0]
 
-    te_tot = np.zeros((curves*angles,self.num_trials))
-    rmse_tot = np.zeros((curves*angles,self.num_trials))
-    errs = np.zeros((self.stylet.num_inserted,curves*angles,self.num_trials))
+    te_tot = np.zeros((curves*angles,num_trials))
+    rmse_tot = np.zeros((curves*angles,num_trials))
+    errs = np.zeros((stylet.num_inserted,curves*angles,num_trials))
+    waveshifts = get_wave_shifts(stylet, fbg_filepath, val_gt_curves, val_gt_angles)
     for k in range(curves):
         for a in range(angles):
             kcx_truth = cos(val_gt_angles[a]) * val_gt_curves[k] 
             kcy_truth = sin(val_gt_angles[a]) * val_gt_curves[k] 
             w_truth = np.array([kcy_truth, kcx_truth, 0])
-            for t in range(self.num_trials):
-                p_gt, r_gt = self.stylet.get_shape(w_truth)
-                p_val, r_val = self.calc_shape_from_data(f'{fbg_filepath}{val_gt_curves[k]}-{round(val_gt_angles[a]*180/pi)}-{t+1}')
+            for t in range(num_trials):
+                p_gt, r_gt = stylet.integrate_shape_from_w_init(w_truth)
+                p_val, r_val = stylet.get_constant_curvature_shape(waveshifts[k*angles+a])
 
                 te = p_gt[-1, :] - p_val[-1, :]
                 te = la.norm(te)
@@ -134,21 +147,19 @@ def perform_validation(self, fbg_filepath, val_gt_curves, val_gt_angles):
     return te_tot, rmse_tot
 
 if __name__ == '__main__':
-    gt_curvatures = np.array([0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
+    gt_cal_curvatures = np.array([0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
+    gt_val_curvatures = np.array([0.33, 0.66, 1.33])
     gt_angles = np.array([0, pi/2])
 
-    stylet = ShapeSensingStylet(14, 5, np.arange(20, 300, 20)*1e-3, 0.00145, 0.3, 0.33, 83e9)
-    
+
+
+    params = '7CH_14AA_300.json'
     cal_path = 'cal_dataset/'
     depth = 0.25
 
-    cal = main(gt_curvatures, gt_angles, stylet)
+    main(params, cal_path, cal_path, depth, gt_cal_curvatures, gt_angles, gt_val_curvatures, gt_angles)
     
-    Cs, weights = cal.perform_calibration(cal_path, depth)
 
-    te, rmse = cal.perform_validation('cal_dataset/', np.array([0.33, 0.66, 1.33]), gt_angles)
-
-    cal.display_validation_results(te, rmse)
 
     
     

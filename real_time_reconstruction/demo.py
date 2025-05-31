@@ -1,5 +1,5 @@
 from calibration import CalibrationExperiment
-from stylet import ShapeSensingStylet
+from stylet import Stylet
 from math import pi
 import numpy as np
 import numpy.linalg as la
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     gt_curvatures = np.array([0.25, 0.5, 0.75, 1.0, 1.25, 1.5])
     gt_angles = np.array([0, pi/2])
 
-    stylet = ShapeSensingStylet(14, 5, np.arange(20, 300, 20)*1e-3, 0.00145, 0.3, 0.33, 83e9)
+    stylet = Stylet(14, 5, np.arange(20, 300, 20)*1e-3, 0.00145, 0.3, 0.33, 83e9)
     
     cal_path = 'cal_dataset/'
     depth = 0.25

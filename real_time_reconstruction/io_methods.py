@@ -93,13 +93,18 @@ def read_trial_data(filepath : str, curve : float, angle : int, num_aa : int, nu
         every insertion.
     """
     trial = np.zeros((num_insertions, num_channels, num_aa))
+    inds = []
     # add the data from each insertion to the trial array
     for k in range(num_insertions):
         fname = f'{filepath}{curve}-{angle}-{k+1}'
-        trial[k, :, :] = read_interrogator_csv(fname, num_aa, num_channels, reference=reference) 
-    
+        try:
+            trial[k, :, :] = read_interrogator_csv(fname, num_aa, num_channels, reference_wavelengths=reference) 
+            inds.append(k)
+        except ValueError:
+            print(f"Warning: 200 valid readings not found. Skipping insertion {fname}")
+
     # average all the insertions
-    trial = np.mean(trial, 0) 
+    trial = np.mean(trial[np.array(inds)], 0) 
 
     return trial
 

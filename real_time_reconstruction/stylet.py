@@ -40,7 +40,7 @@ class Stylet:
             self.stylet_length, self.stylet_diameter, self.emod, \
             self.pratio, self.num_aa, self.num_channels, \
             self.aa_locations = read_parameter_json(parameter_file, calibrated=calibrated)
-            self.ref_filepath, self.cal_matrices, self.aa_weights = None
+            self.ref_filepath, self.cal_matrices, self.aa_weights = (None, None, None)
 
         # get active area locations measured from stylet tip
         self.aa_locations_from_tip = np.ones_like(self.aa_locations)*self.stylet_length - self.aa_locations
@@ -154,15 +154,12 @@ class Stylet:
         w_init_val = np.array([kyz_val, kxz_val, 0])
 
         # perform integration along the stylet length
-        ds = 0.0005
-        N = int(self.insertion_depth / ds) + 1
-        curvature = w_init_val.reshape((-1,3)).repeat(N, axis=0)
-        s = np.arange(N) * ds
-        P_mat, R_mat = self.integratePose_wv(curvature, s, self.stylet_length - self.insertion_depth)
+        
+        P_mat, R_mat = self.integrate_shape_from_w_init(w_init_val)
         
         return P_mat, R_mat
 
-    def integratePose_wv(self, wv, s: np.ndarray = None, s0: float = 0, ds: float = None, R_init: np.ndarray = np.eye( 3 ) ):
+    def integrate_shape_from_w_init(self, w_init_val, R_init: np.ndarray = np.eye( 3 ) ):
         """ 
         Author: Dimitri Lezcano
         Integrate angular deformation to get the pose of the needle along it's arclengths
@@ -178,28 +175,25 @@ class Stylet:
                 -Rmat: N x 3 x 3 SO(3) rotation matrices for
         """
         # set-up the containers
+        ds = 0.0005
+        N = int(self.insertion_depth / ds) + 1
+        wv = w_init_val.reshape((-1,3)).repeat(N, axis=0)
+        s = np.arange(N) * ds
+
         N = wv.shape[ 0 ]
         pmat = np.zeros( (N, 3) )
         Rmat = np.expand_dims( np.eye( 3 ), axis=0 ).repeat( N, axis=0 )
         Rmat[ 0 ] = R_init
 
-        # get the arclengths
-        if (s is None) and (ds is not None):
-            s = s0 + np.arange( N ) * ds
-        elif s is not None:
-            pass
-        else:
-            raise ValueError( "Either 's' or 'ds' must be used, not both." )
-
         # integrate angular deviation vector in order to get the pose
         for i in range( 1, N ):
-            Rmat[ i ] = Rmat[ i - 1 ] @ exp2r( self.ds * np.mean( wv[ i - 1:i ], axis=0 ) )
+            Rmat[ i ] = Rmat[ i - 1 ] @ exp2r( ds * np.mean( wv[ i - 1:i ], axis=0 ) )
             e3vec = Rmat[ :i + 1, :, 2 ].T  # grab z-direction coordinates
 
             if i == 1:
-                pmat[ i ] = pmat[ i - 1 ] + Rmat[ i, :, 2 ] * self.ds
+                pmat[ i ] = pmat[ i - 1 ] + Rmat[ i, :, 2 ] * ds
             else:
-                pmat[ i ] = self.simpson_vec_int( e3vec, self.ds )
+                pmat[ i ] = self.simpson_vec_int( e3vec, ds )
 
         return pmat, Rmat
     
