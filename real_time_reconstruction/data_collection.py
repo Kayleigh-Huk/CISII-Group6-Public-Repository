@@ -13,14 +13,31 @@ def confirm_valid_reading(filename):
     
 def main():
     running = True
+    fpath_confirm = False
+
+    while not fpath_confirm:
+        fpath = input("Enter filepath: ")
+        confirmed = input(f"Is this correct: {fpath}? To make changes, enter N. Otherwise, hit enter: ")
+
+        if confirmed != "N":
+            fpath_confirm = True
+
 
     while running:
-        curve = float(input("Enter curvature: "))
-        angle = int(input("Enter angle (degrees): "))
-        insertion = int(input("Enter insertion #: "))
+        fname_confirm = False
+        while not fname_confirm:
+            curve = input("Enter curvature: ")
+            angle = input("Enter angle (degrees): ")
+            insertion = input("Enter insertion #: ")
 
-        filename = f'{curve}-{angle}-{insertion}'
+            filename = f'{fpath}Curvature_{curve}_Orientation_{angle}_{insertion}'
+            #filename = f'{fpath}{curve}-{angle}-{insertion}'
 
+            confirmed = input(f"Is this correct: {filename}? To make changes, enter N. Otherwise, hit enter: ")
+
+            if confirmed != "N":
+                fname_confirm = True
+        
         result = confirm_valid_reading(filename)
 
         if result:
@@ -28,7 +45,7 @@ def main():
         else:
             print("Insertion was INVALID (200 valid readings NOT present)")
         
-        cont = input("Press Q to exit")
+        cont = input("Enter Q to exit. Hit enter to continue.")
 
         if cont == "Q":
             running = False
