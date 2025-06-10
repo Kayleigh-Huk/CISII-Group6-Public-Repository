@@ -1,0 +1,10 @@
+Metric	Tip Error Results	Root-Mean-Square Error Results
+Overall Outcome	Failed	Failed
+Mean (mm)	1.2524	0.5615
+Standard Deviation (mm):	0.5164	0.2314
+Insertion 0.33-0:	0.7128	0.3193
+Insertion 0.33-90:	1.7645	0.7904
+Insertion 0.66-0:	0.8870	0.3975
+Insertion 0.66-90:	1.9543	0.8758
+Insertion 1.33-0:	0.6662	0.2991
+Insertion 1.33-90:	1.5296	0.6867

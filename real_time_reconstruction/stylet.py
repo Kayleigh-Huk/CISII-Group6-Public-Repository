@@ -39,7 +39,7 @@ class Stylet:
         else:
             self.stylet_length, self.stylet_diameter, self.emod, \
             self.pratio, self.num_aa, self.num_channels, \
-            self.aa_locations = read_parameter_json(parameter_file, calibrated=calibrated)
+            self.skip_channels, self.aa_locations = read_parameter_json(parameter_file, calibrated=calibrated)
             self.ref_filepath, self.cal_matrices, self.aa_weights = (None, None, None)
 
         # get active area locations measured from stylet tip
@@ -116,7 +116,7 @@ class Stylet:
         None
         """
         self.insertion_depth = insertion_depth
-        self.inserted_aa_inds = np.where(self.aa_locations_from_tip < self.insertion_depth)[0]
+        self.inserted_aa_inds = np.where(np.array(self.aa_locations) > (self.stylet_length -self.insertion_depth))[0]
         self.num_inserted = len(self.inserted_aa_inds)
 
     def get_constant_curvature_shape(self, waveshifts : np.ndarray) -> np.ndarray:
@@ -143,7 +143,7 @@ class Stylet:
         kyz_val = 0
         for i in range(self.num_inserted):
             # matrix multiplication for each active area       
-            aa = waveshifts[:, i]
+            aa = waveshifts[:, self.inserted_aa_inds[i]]
             k_est = self.cal_matrices[i] @ aa
 
             # weighted sum of curvature for each active area
@@ -178,9 +178,7 @@ class Stylet:
         ds = 0.0005
         N = int(self.insertion_depth / ds) + 1
         wv = w_init_val.reshape((-1,3)).repeat(N, axis=0)
-        s = np.arange(N) * ds
 
-        N = wv.shape[ 0 ]
         pmat = np.zeros( (N, 3) )
         Rmat = np.expand_dims( np.eye( 3 ), axis=0 ).repeat( N, axis=0 )
         Rmat[ 0 ] = R_init

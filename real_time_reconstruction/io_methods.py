@@ -191,7 +191,6 @@ def get_wavelength_readings(filename : str, wave_data_indices : np.ndarray) -> n
         waves = np.zeros((200, wave_data_indices.shape[0]), dtype=np.float128)
         for line in reader:
             # stop once 200 valid readings found
-            skip = False
             if c >= 200:
                 break
 
@@ -251,3 +250,7 @@ def write_parameter_json(filename, attributes):
     # write the dictionary to the json file provided
     with open(filename, 'w' ) as outfile:
         json.dump(data, outfile, indent=4)
+
+if __name__ == '__main__':
+    attr = [0.3, 0.00145, 83000000000, 0.33, 14, 7, list(np.arange(20, 300, 20) / 1000)]
+    write_parameter_json('stylet_params/7CH_14AA_300.json', attr)
